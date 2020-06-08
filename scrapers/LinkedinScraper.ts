@@ -47,7 +47,6 @@ class LinkedinScraper extends Scraper {
 
   protected async setup() {
     const browser = await puppeteer.launch({
-      executablePath: '/usr/bin/google-chrome',
       headless: true,
       defaultViewport: null,
       pipe: true
@@ -169,7 +168,7 @@ class LinkedinScraper extends Scraper {
         }
       }
     }, Constants.PAGINATION_BTNS);
-    await page.waitForNavigation();
+    await wait();
     await this.getData(page);
   }
 
@@ -187,6 +186,7 @@ class LinkedinScraper extends Scraper {
     await browser.close();
     await asyncWriteFile('./linkedin_jobs.json', JSON.stringify(this.data));
     logger.info(`${this.tag}: `, `Scraping finished`);
+    process.exit(1);
   }
 }
 
