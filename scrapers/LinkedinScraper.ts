@@ -67,8 +67,8 @@ class LinkedinScraper extends Scraper {
       await page.waitForNavigation();
     } catch (err) {
       logger.info(`${this.tag}: `, err);
-      await page.screenshot({ path: 'afterLogin.png' });
-      console.log(err);
+      await page.screenshot({ path: 'loginError.png' });
+      process.exit(1);
     }
   }
 
@@ -93,83 +93,101 @@ class LinkedinScraper extends Scraper {
       await wait();
     } catch (err) {
       logger.error(`${this.tag}: `, err);
-      await page.screenshot({ path: 'jobs.png' });
-      console.log(err);
+      await page.screenshot({ path: 'searchJobsError.png' });
+      process.exit(1);
     }
   }
 
   protected async getData(page: puppeteer.Page) {
-    const freshData = await page.evaluate(
-      async (JOBS_CONTAINER, JOB_TITLE, COMPANY, JOB_CARD) => {
-        const dataArr: any = [];
+    try {
+      const freshData = await page.evaluate(
+        async (JOBS_CONTAINER, JOB_TITLE, COMPANY, JOB_CARD) => {
+          const dataArr: any = [];
 
-        const div = document.querySelector(JOBS_CONTAINER) as Element;
+          const div = document.querySelector(JOBS_CONTAINER) as Element;
 
-        div.scrollTo({
-          top: div.scrollHeight + 1000,
-          left: 0,
-          behavior: 'smooth'
-        });
-
-        await wait();
-
-        const element = document.querySelector(
-          '.artdeco-pagination__pages'
-        ) as Element;
-
-        element.scrollIntoView();
-
-        div && (div.scrollTop = div.scrollHeight);
-
-        const cards = document.querySelectorAll(JOB_CARD);
-
-        cards.forEach(card => {
-          const jobTitle = card.querySelector(JOB_TITLE);
-          const company = card.querySelector(COMPANY);
-          const time = card.querySelector('time');
-          dataArr.push({
-            job: jobTitle?.textContent.trim(),
-            company: company?.textContent.trim(),
-            companyId: company?.href.match(/\d+/g)[0].trim(),
-            timestamp: `${time?.getAttribute(
-              'datetime'
-            )}: ${time?.textContent.trim()}`
+          div.scrollTo({
+            top: div.scrollHeight / 2,
+            left: 0,
+            behavior: 'smooth'
           });
-        });
+          await wait();
 
-        return dataArr;
-      },
-      Constants.JOBS_CONTAINER,
-      Constants.JOB_TITLE,
-      Constants.COMPANY,
-      Constants.JOB_CARD
-    );
+          div.scrollTo({
+            top: div.scrollHeight,
+            left: 0,
+            behavior: 'smooth'
+          });
 
-    this.data = [...this.data, ...freshData];
+          await wait();
+
+          const paginationBtn = document.querySelector(
+            Constants.PAGINATION_BTNS
+          ) as HTMLElement;
+
+          paginationBtn.scrollIntoView();
+
+          div && (div.scrollTop = div.scrollHeight);
+
+          const cards = document.querySelectorAll(JOB_CARD);
+
+          cards.forEach(card => {
+            const jobTitle = card.querySelector(JOB_TITLE);
+            const company = card.querySelector(COMPANY);
+            const time = card.querySelector('time');
+            dataArr.push({
+              job: jobTitle?.textContent.trim(),
+              company: company?.textContent.trim(),
+              companyId: company?.href.match(/\d+/g)[0].trim(),
+              timestamp: `${time?.getAttribute(
+                'datetime'
+              )}: ${time?.textContent.trim()}`
+            });
+          });
+
+          return dataArr;
+        },
+        Constants.JOBS_CONTAINER,
+        Constants.JOB_TITLE,
+        Constants.COMPANY,
+        Constants.JOB_CARD
+      );
+      this.data = [...this.data, ...freshData];
+    } catch (err) {
+      logger.error(`${this.tag}: `, err);
+      await page.screenshot({ path: 'getDataError.png' });
+      process.exit(1);
+    }
   }
 
   protected async loadMore(page: puppeteer.Page) {
-    await page.evaluate(PAGINATION_BTNS => {
-      const btns = Array.from(document.querySelectorAll(PAGINATION_BTNS));
-      const curBtnIndex = btns.findIndex(btn => {
-        const span = btn.querySelector('.ally-text');
-        return span?.textContent === 'Current page';
-      });
-      if (curBtnIndex) {
-        const nextBtn = btns[curBtnIndex + 1];
-        if (nextBtn) {
-          nextBtn.click() as HTMLElement;
-          logger.info(
-            `${this.tag}: `,
-            `scraping...: page ${curBtnIndex + 2}, ${this.jobPosition} - ${
-              this.location
-            }`
-          );
+    try {
+      await page.evaluate(PAGINATION_BTNS => {
+        const btns = Array.from(document.querySelectorAll(PAGINATION_BTNS));
+        const curBtnIndex = btns.findIndex(btn => {
+          const span = btn.querySelector('.ally-text');
+          return span?.textContent === 'Current page';
+        });
+        if (curBtnIndex) {
+          const nextBtn = btns[curBtnIndex + 1];
+          if (nextBtn) {
+            nextBtn.click() as HTMLElement;
+            logger.info(
+              `${this.tag}: `,
+              `scraping...: page ${curBtnIndex + 2}, ${this.jobPosition} - ${
+                this.location
+              }`
+            );
+          }
         }
-      }
-    }, Constants.PAGINATION_BTNS);
-    await wait();
-    await this.getData(page);
+      }, Constants.PAGINATION_BTNS);
+      await wait();
+      await this.getData(page);
+    } catch (err) {
+      logger.error(`${this.tag}: `, err);
+      await page.screenshot({ path: 'loadMoreError.png' });
+      process.exit(1);
+    }
   }
 
   public async run() {
