@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 import { wait } from '../utils/wait';
 import { logger } from '../logger';
-import userAgent from 'user-agents';
+import UserAgent from 'user-agents';
 import { Scraper } from '../Scraper';
 import fs from 'fs';
 import util from 'util';
@@ -14,7 +14,7 @@ enum Constants {
   USERNAME_INPUT = '#username',
   PASSWORD_INPUT = '#password',
   SIGNIN_BTN = '.login__form_action_container button[type=submit]',
-  JOBS_CONTAINER = '.jobs-search-two-pane__results',
+  JOBS_CONTAINER = '.jobs-search-results--is-two-pane',
   JOB_TITLE = '.job-card-list__title',
   COMPANY = '.job-card-container__company-name',
   DATE_POSTED_BTN = 'button[aria-controls="date-posted-facet-values"]',
@@ -49,7 +49,6 @@ class LinkedinScraper extends Scraper {
     const browser = await puppeteer.launch({
       headless: false,
       slowMo: 10,
-      userDataDir: './data',
       defaultViewport: null
     });
     return { browser, page: await browser.newPage() };
@@ -58,7 +57,7 @@ class LinkedinScraper extends Scraper {
   protected async login(page: puppeteer.Page) {
     try {
       await page.goto(this.loginPage);
-      await wait();
+      await page.waitFor(3000);
       if (await page.$(Constants.USERNAME_INPUT)) {
         await page.waitForSelector(Constants.USERNAME_INPUT);
         await page.click(Constants.USERNAME_INPUT);
@@ -68,7 +67,6 @@ class LinkedinScraper extends Scraper {
         logger.info(`${this.tag}: `, `try to sign in..`);
         await page.click(Constants.SIGNIN_BTN);
         await page.waitForNavigation();
-        // await wait();
       }
     } catch (err) {
       logger.info(`${this.tag}: loginError: `, err);
@@ -79,24 +77,28 @@ class LinkedinScraper extends Scraper {
 
   protected async searchJobs(page: puppeteer.Page) {
     try {
+      const userAgent = new UserAgent({ deviceCategory: 'desktop' });
       await page.setUserAgent(userAgent.toString());
       await page.goto(this.jobsPage);
       await page.waitForSelector(Constants.SEARCH_JOB_TITLE_INPUT);
       await page.click(Constants.SEARCH_JOB_TITLE_INPUT);
       await page.keyboard.type(this.jobPosition);
+      await page.waitFor(3000);
       await page.click(Constants.SEARCH_LOCATION_INPUT);
       await page.keyboard.type(this.location);
       await page.click(Constants.SEARCH_SUBMIT_BTN);
-      await wait();
+      await page.waitFor(3000);
       await page.waitForSelector(Constants.DATE_POSTED_BTN);
       await page.click(Constants.DATE_POSTED_BTN);
       await page.click(Constants.RADIO_BTN);
       await page.click(Constants.APPLY_BTN);
+      await page.waitForNavigation();
+
       logger.info(
         `${this.tag}: `,
         `try to search jobs.., ${this.jobPosition} - ${this.location}`
       );
-      await wait();
+      await page.waitFor(3000);
     } catch (err) {
       logger.error(`${this.tag}: searchJobsErro: `, err);
       await page.screenshot({ path: 'searchJobsError.png' });
@@ -106,34 +108,58 @@ class LinkedinScraper extends Scraper {
 
   protected async getData(page: puppeteer.Page) {
     try {
-      const freshData = await page.evaluate(
-        async (JOBS_CONTAINER, JOB_TITLE, COMPANY, JOB_CARD) => {
-          const dataArr: any = [];
+      await page.evaluate(JOBS_CONTAINER => {
+        const div = document.querySelector(JOBS_CONTAINER) as Element;
 
+        div.scrollTo({
+          top: div.scrollHeight / 3,
+          left: 0,
+          behavior: 'smooth'
+        });
+      }, Constants.JOBS_CONTAINER);
+
+      await page.waitFor(3000);
+
+      await page.evaluate(JOBS_CONTAINER => {
+        const div = document.querySelector(JOBS_CONTAINER) as Element;
+
+        div.scrollTo({
+          top: div.scrollHeight / 2,
+          left: 0,
+          behavior: 'smooth'
+        });
+      }, Constants.JOBS_CONTAINER);
+
+      await page.waitFor(3000);
+
+      await page.evaluate(JOBS_CONTAINER => {
+        const div = document.querySelector(JOBS_CONTAINER) as Element;
+
+        div.scrollTo({
+          top: div.scrollHeight,
+          left: 0,
+          behavior: 'smooth'
+        });
+      }, Constants.JOBS_CONTAINER);
+
+      await page.waitFor(3000);
+
+      await page.evaluate(
+        (JOBS_CONTAINER, PAGINATION_BTNS) => {
           const div = document.querySelector(JOBS_CONTAINER) as Element;
 
-          div.scrollTo({
-            top: div.scrollHeight / 2,
-            left: 0,
-            behavior: 'smooth'
-          });
-          await wait();
+          div && (div.scrollTop = div.scrollHeight);
 
-          div.scrollTo({
-            top: div.scrollHeight,
-            left: 0,
-            behavior: 'smooth'
-          });
-
-          await wait();
-
-          const paginationBtn = document.querySelector(
-            Constants.PAGINATION_BTNS
-          );
+          const paginationBtn = document.querySelector(PAGINATION_BTNS);
 
           paginationBtn && paginationBtn.scrollIntoView();
-
-          div && (div.scrollTop = div.scrollHeight);
+        },
+        Constants.JOBS_CONTAINER,
+        Constants.PAGINATION_BTNS
+      );
+      const freshData = await page.evaluate(
+        (JOB_TITLE, COMPANY, JOB_CARD) => {
+          const dataArr: any = [];
 
           const cards = document.querySelectorAll(JOB_CARD);
 
@@ -153,7 +179,6 @@ class LinkedinScraper extends Scraper {
 
           return dataArr;
         },
-        Constants.JOBS_CONTAINER,
         Constants.JOB_TITLE,
         Constants.COMPANY,
         Constants.JOB_CARD
@@ -178,16 +203,10 @@ class LinkedinScraper extends Scraper {
           const nextBtn = btns[curBtnIndex + 1];
           if (nextBtn) {
             nextBtn.click() as HTMLElement;
-            logger.info(
-              `${this.tag}: `,
-              `scraping...: page ${curBtnIndex + 2}, ${this.jobPosition} - ${
-                this.location
-              }`
-            );
           }
         }
       }, Constants.PAGINATION_BTNS);
-      await wait();
+      await page.waitFor(3000);
       await this.getData(page);
     } catch (err) {
       logger.error(`${this.tag}: loadMoreError: `, err);
@@ -206,11 +225,10 @@ class LinkedinScraper extends Scraper {
       `data scraping, ${this.jobPosition} - ${this.location}`
     );
     await this.getData(page);
-    // await this.loadMore(page);
+    await this.loadMore(page);
     await browser.close();
     await asyncWriteFile('./linkedin_jobs.json', JSON.stringify(this.data));
     logger.info(`${this.tag}: `, `Scraping finished`);
-    process.exit(1);
   }
 }
 
