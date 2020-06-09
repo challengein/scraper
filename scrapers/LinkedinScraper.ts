@@ -23,7 +23,7 @@ enum Constants {
   SEARCH_JOB_TITLE_INPUT = '.jobs-search-box__input--keyword input[type=text]',
   SEARCH_LOCATION_INPUT = '.jobs-search-box__input--location input[type=text]',
   SEARCH_SUBMIT_BTN = 'button[type=submit].jobs-search-box__submit-button',
-  PAGINATION_BTNS = '.artdeco-pagination__pages button'
+  CURRENT_PAGE_BTN_CONTAINER = '.artdeco-pagination__indicator--number.active.selected'
 }
 
 interface JobInfo {
@@ -51,7 +51,12 @@ class LinkedinScraper extends Scraper {
       userDataDir: './data',
       defaultViewport: null
     });
-    return { browser, page: await browser.newPage() };
+
+    const page = await browser.newPage();
+    const userAgent = new UserAgent({ deviceCategory: 'desktop' });
+    await page.setUserAgent(userAgent.toString());
+
+    return { browser, page };
   }
 
   protected async login(page: puppeteer.Page) {
@@ -59,7 +64,6 @@ class LinkedinScraper extends Scraper {
       await page.goto(this.loginPage);
       await page.waitFor(3000);
       if (await page.$(Constants.USERNAME_INPUT)) {
-        await page.waitForSelector(Constants.USERNAME_INPUT);
         await page.click(Constants.USERNAME_INPUT);
         await page.keyboard.type(process.env.login as string);
         await page.click(Constants.PASSWORD_INPUT);
@@ -77,17 +81,15 @@ class LinkedinScraper extends Scraper {
 
   protected async searchJobs(page: puppeteer.Page) {
     try {
-      const userAgent = new UserAgent({ deviceCategory: 'desktop' });
-      await page.setUserAgent(userAgent.toString());
       await page.goto(this.jobsPage);
       await page.waitForSelector(Constants.SEARCH_JOB_TITLE_INPUT);
       await page.click(Constants.SEARCH_JOB_TITLE_INPUT);
       await page.keyboard.type(this.jobPosition);
-      await page.waitFor(3000);
+      await page.waitFor(1500);
       await page.click(Constants.SEARCH_LOCATION_INPUT);
       await page.keyboard.type(this.location);
       await page.click(Constants.SEARCH_SUBMIT_BTN);
-      await page.waitFor(3000);
+      await page.waitFor(1500);
       await page.waitForSelector(Constants.DATE_POSTED_BTN);
       await page.click(Constants.DATE_POSTED_BTN);
       await page.click(Constants.RADIO_BTN);
@@ -108,55 +110,26 @@ class LinkedinScraper extends Scraper {
 
   protected async getData(page: puppeteer.Page) {
     try {
-      await page.evaluate(JOBS_CONTAINER => {
-        const div = document.querySelector(JOBS_CONTAINER) as Element;
+      let i = 4;
 
-        div.scrollTo({
-          top: div.scrollHeight / 3,
-          left: 0,
-          behavior: 'smooth'
-        });
-      }, Constants.JOBS_CONTAINER);
+      while (i >= 0) {
+        await page.evaluate(
+          (JOBS_CONTAINER, i) => {
+            const div = document.querySelector(JOBS_CONTAINER) as Element;
 
-      await page.waitFor(3000);
+            div.scrollTo({
+              top: i > 0 ? div.scrollHeight / i : div.scrollHeight,
+              left: 0,
+              behavior: 'smooth'
+            });
+          },
+          Constants.JOBS_CONTAINER,
+          i
+        );
 
-      await page.evaluate(JOBS_CONTAINER => {
-        const div = document.querySelector(JOBS_CONTAINER) as Element;
-
-        div.scrollTo({
-          top: div.scrollHeight / 2,
-          left: 0,
-          behavior: 'smooth'
-        });
-      }, Constants.JOBS_CONTAINER);
-
-      await page.waitFor(3000);
-
-      await page.evaluate(JOBS_CONTAINER => {
-        const div = document.querySelector(JOBS_CONTAINER) as Element;
-
-        div.scrollTo({
-          top: div.scrollHeight,
-          left: 0,
-          behavior: 'smooth'
-        });
-      }, Constants.JOBS_CONTAINER);
-
-      await page.waitFor(3000);
-
-      await page.evaluate(
-        (JOBS_CONTAINER, PAGINATION_BTNS) => {
-          const div = document.querySelector(JOBS_CONTAINER) as Element;
-
-          div && (div.scrollTop = div.scrollHeight);
-
-          const paginationBtn = document.querySelector(PAGINATION_BTNS);
-
-          paginationBtn && paginationBtn.scrollIntoView();
-        },
-        Constants.JOBS_CONTAINER,
-        Constants.PAGINATION_BTNS
-      );
+        await page.waitFor(1500);
+        i--;
+      }
       const freshData = await page.evaluate(
         (JOB_TITLE, COMPANY, JOB_CARD) => {
           const dataArr: any = [];
@@ -193,19 +166,14 @@ class LinkedinScraper extends Scraper {
 
   protected async loadMore(page: puppeteer.Page) {
     try {
-      await page.evaluate(PAGINATION_BTNS => {
-        const btns = Array.from(document.querySelectorAll(PAGINATION_BTNS));
-        const curBtnIndex = btns.findIndex(btn => {
-          const span = btn.querySelector('.ally-text');
-          return span?.textContent === 'Current page';
-        });
-        if (curBtnIndex) {
-          const nextBtn = btns[curBtnIndex + 1];
-          if (nextBtn) {
-            nextBtn.click() as HTMLElement;
-          }
-        }
-      }, Constants.PAGINATION_BTNS);
+      await page.evaluate(CURRENT_PAGE_BTN_CONTAINER => {
+        const curBtnContainer = document.querySelector(
+          CURRENT_PAGE_BTN_CONTAINER
+        );
+        console.log(curBtnContainer);
+        const nextBtn = curBtnContainer.nextElementSibling.children[0];
+        nextBtn && nextBtn.click();
+      }, Constants.CURRENT_PAGE_BTN_CONTAINER);
       await page.waitFor(3000);
       await this.getData(page);
     } catch (err) {
