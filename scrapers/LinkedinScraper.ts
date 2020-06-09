@@ -48,8 +48,8 @@ class LinkedinScraper extends Scraper {
   protected async setup() {
     const browser = await puppeteer.launch({
       headless: true,
-      defaultViewport: null,
-      pipe: true
+      slowMo: 10,
+      defaultViewport: null
     });
     return { browser, page: await browser.newPage() };
   }
