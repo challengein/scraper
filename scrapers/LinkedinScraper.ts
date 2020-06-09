@@ -200,7 +200,7 @@ class LinkedinScraper extends Scraper {
       `data scraping, ${this.jobPosition} - ${this.location}`
     );
     await this.getData(page);
-    this.loadMore(page);
+    await this.loadMore(page);
     await browser.close();
     await asyncWriteFile('./linkedin_jobs.json', JSON.stringify(this.data));
     logger.info(`${this.tag}: `, `Scraping finished`);
