@@ -23,7 +23,7 @@ enum Constants {
   JOB_CARD = '.job-card-container',
   SEARCH_JOB_TITLE_INPUT = '.jobs-search-box__input--keyword input[type=text]',
   SEARCH_LOCATION_INPUT = '.jobs-search-box__input--location input[type=text]',
-  SEARCH_SUBMIT_BTN = '.jobs-search-box button[type=submit]',
+  SEARCH_SUBMIT_BTN = 'button[type=submit].jobs-search-box__submit-button',
   PAGINATION_BTNS = '.artdeco-pagination__pages button'
 }
 
@@ -49,6 +49,7 @@ class LinkedinScraper extends Scraper {
     const browser = await puppeteer.launch({
       headless: true,
       slowMo: 10,
+      userDataDir: './data',
       defaultViewport: null
     });
     return { browser, page: await browser.newPage() };
@@ -57,16 +58,20 @@ class LinkedinScraper extends Scraper {
   protected async login(page: puppeteer.Page) {
     try {
       await page.goto(this.loginPage);
-      await page.waitForSelector(Constants.USERNAME_INPUT);
-      await page.click(Constants.USERNAME_INPUT);
-      await page.keyboard.type(process.env.login as string);
-      await page.click(Constants.PASSWORD_INPUT);
-      await page.keyboard.type(process.env.password as string);
-      logger.info(`${this.tag}: `, `try to sign in..`);
-      await page.click(Constants.SIGNIN_BTN);
-      await page.waitForNavigation();
+      await wait();
+      if (await page.$(Constants.USERNAME_INPUT)) {
+        await page.waitForSelector(Constants.USERNAME_INPUT);
+        await page.click(Constants.USERNAME_INPUT);
+        await page.keyboard.type(process.env.login as string);
+        await page.click(Constants.PASSWORD_INPUT);
+        await page.keyboard.type(process.env.password as string);
+        logger.info(`${this.tag}: `, `try to sign in..`);
+        await page.click(Constants.SIGNIN_BTN);
+        await page.waitForNavigation();
+        // await wait();
+      }
     } catch (err) {
-      logger.info(`${this.tag}: `, err);
+      logger.info(`${this.tag}: loginError: `, err);
       await page.screenshot({ path: 'loginError.png' });
       process.exit(1);
     }
@@ -82,7 +87,7 @@ class LinkedinScraper extends Scraper {
       await page.click(Constants.SEARCH_LOCATION_INPUT);
       await page.keyboard.type(this.location);
       await page.click(Constants.SEARCH_SUBMIT_BTN);
-      await page.waitForNavigation();
+      await wait();
       await page.click(Constants.DATE_POSTED_BTN);
       await page.click(Constants.RADIO_BTN);
       await page.click(Constants.APPLY_BTN);
@@ -92,7 +97,7 @@ class LinkedinScraper extends Scraper {
       );
       await wait();
     } catch (err) {
-      logger.error(`${this.tag}: `, err);
+      logger.error(`${this.tag}: searchJobsErro: `, err);
       await page.screenshot({ path: 'searchJobsError.png' });
       process.exit(1);
     }
@@ -154,7 +159,7 @@ class LinkedinScraper extends Scraper {
       );
       this.data = [...this.data, ...freshData];
     } catch (err) {
-      logger.error(`${this.tag}: `, err);
+      logger.error(`${this.tag}: getDataError: `, err);
       await page.screenshot({ path: 'getDataError.png' });
       process.exit(1);
     }
@@ -184,7 +189,7 @@ class LinkedinScraper extends Scraper {
       await wait();
       await this.getData(page);
     } catch (err) {
-      logger.error(`${this.tag}: `, err);
+      logger.error(`${this.tag}: loadMoreError: `, err);
       await page.screenshot({ path: 'loadMoreError.png' });
       process.exit(1);
     }
