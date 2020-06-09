@@ -50,7 +50,8 @@ class LinkedinScraper extends Scraper {
     const browser = await puppeteer.launch({
       headless: false,
       slowMo: 10,
-      userDataDir: './data'
+      userDataDir: './data',
+      // args: ['--start-maximized'],
       defaultViewport: null
     });
 
@@ -86,7 +87,6 @@ class LinkedinScraper extends Scraper {
       await page.goto(this.jobsPage);
       await page.waitFor(5000);
       if (await page.$(Constants.MESSAGES_OVERLAY)) {
-        await page.waitForSelector(Constants.MESSAGES_OVERLAY);
         await page.evaluate(MESSAGES_BTN => {
           const btn = document.querySelector(MESSAGES_BTN) as HTMLElement;
           btn && btn.click();
@@ -99,9 +99,10 @@ class LinkedinScraper extends Scraper {
       await page.waitFor(1500);
       await page.click(Constants.SEARCH_LOCATION_INPUT);
       await page.keyboard.type(this.location);
-
-      await page.click(Constants.SEARCH_SUBMIT_BTN);
-      await page.waitFor(1500);
+      await page.evaluate(SEARCH_SUBMIT_BTN => {
+        const btn = document.querySelector(SEARCH_SUBMIT_BTN);
+        btn.click();
+      }, Constants.SEARCH_SUBMIT_BTN);
       await page.waitForSelector(Constants.DATE_POSTED_BTN);
       await page.click(Constants.DATE_POSTED_BTN);
       await page.click(Constants.RADIO_BTN);
