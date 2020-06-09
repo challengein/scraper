@@ -48,6 +48,7 @@ class LinkedinScraper extends Scraper {
     const browser = await puppeteer.launch({
       headless: false,
       slowMo: 10,
+      userDataDir: './data',
       defaultViewport: null
     });
     return { browser, page: await browser.newPage() };
