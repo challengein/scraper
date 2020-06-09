@@ -88,6 +88,7 @@ class LinkedinScraper extends Scraper {
       await page.keyboard.type(this.location);
       await page.click(Constants.SEARCH_SUBMIT_BTN);
       await wait();
+      await page.waitForSelector(Constants.DATE_POSTED_BTN);
       await page.click(Constants.DATE_POSTED_BTN);
       await page.click(Constants.RADIO_BTN);
       await page.click(Constants.APPLY_BTN);
