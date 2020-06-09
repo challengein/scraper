@@ -1,7 +1,6 @@
 import puppeteer from 'puppeteer';
 import dotenv from 'dotenv';
 dotenv.config();
-import { wait } from '../utils/wait';
 import { logger } from '../logger';
 import UserAgent from 'user-agents';
 import { Scraper } from '../Scraper';
