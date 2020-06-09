@@ -28,7 +28,7 @@ enum Constants {
 }
 
 interface JobInfo {
-  JOB_TITLE: string | undefined;
+  job: string | undefined;
   company: string | undefined;
   companyId: number | undefined;
   timestamp: string | undefined;
@@ -128,7 +128,7 @@ class LinkedinScraper extends Scraper {
           const company = card.querySelector(COMPANY);
           const time = card.querySelector('time');
           dataArr.push({
-            JOB_TITLE: jobTitle?.textContent.trim(),
+            job: jobTitle?.textContent.trim(),
             company: company?.textContent.trim(),
             companyId: company?.href.match(/\d+/g)[0].trim(),
             timestamp: `${time?.getAttribute(
