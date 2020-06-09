@@ -23,7 +23,9 @@ enum Constants {
   SEARCH_JOB_TITLE_INPUT = '.jobs-search-box__input--keyword input[type=text]',
   SEARCH_LOCATION_INPUT = '.jobs-search-box__input--location input[type=text]',
   SEARCH_SUBMIT_BTN = 'button[type=submit].jobs-search-box__submit-button',
-  CURRENT_PAGE_BTN_CONTAINER = '.artdeco-pagination__indicator--number.active.selected'
+  CURRENT_PAGE_BTN_CONTAINER = '.artdeco-pagination__indicator--number.active.selected',
+  MESSAGES_BTN = '.msg-overlay-bubble-header__button',
+  MESSAGES_OVERLAY = '.msg-overlay-bubble-header[data-control-name="overlay.minimize_connection_list_bar"]'
 }
 
 interface JobInfo {
@@ -48,7 +50,7 @@ class LinkedinScraper extends Scraper {
     const browser = await puppeteer.launch({
       headless: false,
       slowMo: 10,
-      userDataDir: './data',
+      userDataDir: './data'
       defaultViewport: null
     });
 
@@ -82,12 +84,22 @@ class LinkedinScraper extends Scraper {
   protected async searchJobs(page: puppeteer.Page) {
     try {
       await page.goto(this.jobsPage);
+      await page.waitFor(5000);
+      if (await page.$(Constants.MESSAGES_OVERLAY)) {
+        await page.waitForSelector(Constants.MESSAGES_OVERLAY);
+        await page.evaluate(MESSAGES_BTN => {
+          const btn = document.querySelector(MESSAGES_BTN) as HTMLElement;
+          btn && btn.click();
+        }, Constants.MESSAGES_BTN);
+      }
+
       await page.waitForSelector(Constants.SEARCH_JOB_TITLE_INPUT);
       await page.click(Constants.SEARCH_JOB_TITLE_INPUT);
       await page.keyboard.type(this.jobPosition);
       await page.waitFor(1500);
       await page.click(Constants.SEARCH_LOCATION_INPUT);
       await page.keyboard.type(this.location);
+
       await page.click(Constants.SEARCH_SUBMIT_BTN);
       await page.waitFor(1500);
       await page.waitForSelector(Constants.DATE_POSTED_BTN);
