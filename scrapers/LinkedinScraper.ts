@@ -51,7 +51,8 @@ class LinkedinScraper extends Scraper {
       headless: false,
       slowMo: 10,
       userDataDir: './data',
-      // args: ['--start-maximized'],
+      args: ['--start-maximized'],
+      executablePath: process.env.path || undefined,
       defaultViewport: null
     });
 
@@ -73,7 +74,7 @@ class LinkedinScraper extends Scraper {
         await page.keyboard.type(process.env.password as string);
         logger.info(`${this.tag}: `, `try to sign in..`);
         await page.click(Constants.SIGNIN_BTN);
-        await page.waitForNavigation();
+        await page.waitFor(4000);
       }
     } catch (err) {
       logger.info(`${this.tag}: loginError: `, err);
@@ -121,7 +122,7 @@ class LinkedinScraper extends Scraper {
         btn && btn.click();
       }, Constants.APPLY_BTN);
 
-      await page.waitForNavigation();
+      await page.waitFor(4000);
 
       logger.info(
         `${this.tag}: `,
@@ -197,7 +198,6 @@ class LinkedinScraper extends Scraper {
         const curBtnContainer = document.querySelector(
           CURRENT_PAGE_BTN_CONTAINER
         );
-        console.log(curBtnContainer);
         const nextBtn = curBtnContainer.nextElementSibling.children[0];
         nextBtn && nextBtn.click();
       }, Constants.CURRENT_PAGE_BTN_CONTAINER);
