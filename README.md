@@ -11,7 +11,7 @@ npm install
 | job      |  React  |
 | location | Berlin  |
 
-## Env variables for linkedInScraper
+## Env variables for LinkedInScraper
 
 create .env file in root of project
 
