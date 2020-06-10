@@ -16,8 +16,8 @@ enum Constants {
   JOBS_CONTAINER = '.jobs-search-results--is-two-pane',
   JOB_TITLE = '.job-card-list__title',
   COMPANY = '.job-card-container__company-name',
-  DATE_POSTED_BTN = 'button[aria-controls="date-posted-facet-values"]',
-  RADIO_BTN = '.search-s-facet-value__name',
+  DATE_POSTED_BTN = '.search-s-facet--f_TPR button',
+  RADIO_BTNS_CONTAINER = '#date-posted-facet-values ul.search-s-facet__list',
   APPLY_BTN = 'button[data-control-name="filter_pill_apply"]',
   JOB_CARD = '.job-card-container',
   SEARCH_JOB_TITLE_INPUT = '.jobs-search-box__input--keyword input[type=text]',
@@ -103,10 +103,24 @@ class LinkedinScraper extends Scraper {
         const btn = document.querySelector(SEARCH_SUBMIT_BTN);
         btn.click();
       }, Constants.SEARCH_SUBMIT_BTN);
-      await page.waitForSelector(Constants.DATE_POSTED_BTN);
-      await page.click(Constants.DATE_POSTED_BTN);
-      await page.click(Constants.RADIO_BTN);
-      await page.click(Constants.APPLY_BTN);
+      await page.waitFor(4000);
+
+      await page.evaluate(DATE_POSTED_BTN => {
+        const dropdownBtn = document.querySelector(DATE_POSTED_BTN);
+        dropdownBtn && dropdownBtn.click();
+      }, Constants.DATE_POSTED_BTN);
+      await page.waitFor(500);
+      await page.evaluate(RADIO_BTNS_CONTAINER => {
+        const radioBtnsContainer = document.querySelector(RADIO_BTNS_CONTAINER);
+        radioBtnsContainer &&
+          radioBtnsContainer.children[0].children[1].click();
+      }, Constants.RADIO_BTNS_CONTAINER);
+      await page.waitFor(500);
+      await page.evaluate(APPLY_BTN => {
+        const btn = document.querySelector(APPLY_BTN);
+        btn && btn.click();
+      }, Constants.APPLY_BTN);
+
       await page.waitForNavigation();
 
       logger.info(
