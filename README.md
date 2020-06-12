@@ -10,6 +10,17 @@ npm install
 | -------- | :-----: |
 | job      |  React  |
 | location | Berlin  |
+| maxPages |    2    |
+
+## Env variables for LinkedInScraper
+
+create .env file in root of project
+
+| name     |          |    description    |
+| -------- | :------: | :---------------: |
+| login    | required |  linkedIn login   |
+| password | required | linkedIn password |
+| path     | optional |  path to browser  |
 
 ## Usage
 
@@ -20,9 +31,5 @@ npm start
 or with parameters
 
 ```shell
-npm start React London
+npm start React London 5
 ```
-
-## Credentials
-
-create .env file and create login, password variables
