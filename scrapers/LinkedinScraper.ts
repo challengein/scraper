@@ -25,7 +25,7 @@ enum Constants {
   SEARCH_JOB_TITLE_INPUT = '.jobs-search-box__input--keyword input[type=text]',
   SEARCH_LOCATION_INPUT = '.jobs-search-box__input--location input[type=text]',
   SEARCH_SUBMIT_BTN = 'button[type=submit].jobs-search-box__submit-button',
-  CURRENT_PAGE_BTN_CONTAINER = '.artdeco-pagination__indicator--number.selected',
+  CURRENT_PAGE_BTN_CONTAINER = '.artdeco-pagination__indicator--number.active.selected',
   MESSAGES_BTN = '.msg-overlay-bubble-header__button',
   MESSAGES_OVERLAY = '.msg-overlay-bubble-header[data-control-name="overlay.minimize_connection_list_bar"]',
   PROFILE = '.profile-rail-card__actor-link',
@@ -125,6 +125,7 @@ class LinkedinScraper extends Scraper {
           btn.click();
         }
       }, Constants.APPLY_BTN);
+      await page.waitFor(4000);
     } catch (err) {
       logger.error(`${this.tag}:`, err);
     }
@@ -259,7 +260,9 @@ class LinkedinScraper extends Scraper {
 
   protected async loadMore(page: Page) {
     try {
-      if ((await page.$(Constants.PAGINATION)) === null) return;
+      if ((await page.$(Constants.PAGINATION)) === null) {
+        return (this.continue = false);
+      }
       const stop = await page.evaluate(CURRENT_PAGE_BTN_CONTAINER => {
         const curBtnContainer = document.querySelector(
           CURRENT_PAGE_BTN_CONTAINER
@@ -272,7 +275,6 @@ class LinkedinScraper extends Scraper {
       }, Constants.CURRENT_PAGE_BTN_CONTAINER);
 
       await page.waitFor(3000);
-
       if (!stop && this.currentPage < this.maxPages) {
         this.currentPage++;
       } else {
