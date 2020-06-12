@@ -98,7 +98,6 @@ class LinkedinScraper extends Scraper {
       await page.keyboard.type(process.env.password as string);
       logger.info(`${this.tag}: `, `try to sign in..`);
       await page.click(Constants.SIGNIN_BTN);
-      await page.waitFor(4000);
     } catch (err) {
       logger.info(`${this.tag}: loginError: `, err);
       await page.screenshot({ path: 'loginError.png' });
@@ -108,6 +107,7 @@ class LinkedinScraper extends Scraper {
 
   protected async set24hFilter(page: Page) {
     try {
+      await page.waitFor(Constants.DATE_POSTED_BTN);
       await page.evaluate(DATE_POSTED_BTN => {
         const dropdownBtn = document.querySelector(DATE_POSTED_BTN);
         dropdownBtn && dropdownBtn.click();
@@ -125,7 +125,6 @@ class LinkedinScraper extends Scraper {
           btn.click();
         }
       }, Constants.APPLY_BTN);
-      await page.waitFor(4000);
     } catch (err) {
       logger.error(`${this.tag}:`, err);
     }
