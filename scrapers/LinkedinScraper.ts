@@ -16,12 +16,12 @@ enum Constants {
   PASSWORD_INPUT = '#password',
   SIGNIN_BTN = '.login__form_action_container button[type=submit]',
   JOBS_CONTAINER = '.jobs-search-results--is-two-pane',
-  JOB_TITLE = '.job-card-list__title',
-  COMPANY = '.job-card-container__company-name',
-  DATE_POSTED_BTN = 'button[aria-label="Date Posted filter. Clicking this button displays all Date Posted filter options."]',
+  JOB_TITLE = '.job-card-search__title',
+  COMPANY = '.job-card-search__company-name-link',
+  DATE_POSTED_BTN = 'button[aria-controls="date-posted-facet-values"]',
   RADIO_BTNS_CONTAINER = '#date-posted-facet-values ul.search-s-facet__list',
-  APPLY_BTN = 'button[data-control-name="filter_pill_apply"]',
-  JOB_CARD = '.job-card-container',
+  APPLY_BTN = 'div#date-posted-facet-values button[data-control-name="filter_pill_apply"]',
+  JOB_CARD = '.jobs-search-results__list li',
   SEARCH_JOB_TITLE_INPUT = '.jobs-search-box__input--keyword input[type=text]',
   SEARCH_LOCATION_INPUT = '.jobs-search-box__input--location input[type=text]',
   SEARCH_SUBMIT_BTN = 'button[type=submit].jobs-search-box__submit-button',
@@ -62,7 +62,7 @@ class LinkedinScraper extends Scraper {
   protected async setup() {
     const browser = await puppeteer.launch({
       headless: false,
-      slowMo: 50,
+      slowMo: 100,
       userDataDir: './data',
       // args: ['--start-maximized'],
       executablePath: process.env.path || undefined,
@@ -102,7 +102,8 @@ class LinkedinScraper extends Scraper {
       await page.keyboard.type(process.env.password as string);
       logger.info(`${this.tag}: `, `try to sign in..`);
       await page.click(Constants.SIGNIN_BTN);
-      await page.waitForNavigation();
+      await page.waitFor(4000);
+
     } catch (err) {
       logger.info(`${this.tag}: loginError: `, err);
       await page.screenshot({ path: 'loginError.png' });
@@ -130,12 +131,17 @@ class LinkedinScraper extends Scraper {
       }, Constants.RADIO_BTNS_CONTAINER);
       await page.waitFor(500);
 
+
       if ((await page.$(Constants.APPLY_BTN)) === null)
         return logger.error(`${this.tag}:`, 'cant find APPLY_BTN');
       await page.evaluate(APPLY_BTN => {
+
         const btn = document.querySelector(APPLY_BTN);
-        btn && btn.click();
+        if (btn) {
+            btn.click();
+        }
       }, Constants.APPLY_BTN);
+      await page.waitFor(4000);
       await this.waitForUpdateEventResponse(page);
     } catch (err) {
       logger.error(`${this.tag}:`, err);
@@ -203,6 +209,7 @@ class LinkedinScraper extends Scraper {
 
   protected async getData(page: Page) {
     try {
+      logger.info('getData');
       await page.waitFor(3000);
       await page.waitForSelector(Constants.JOBS_CONTAINER);
       let i = 25;
@@ -243,7 +250,8 @@ class LinkedinScraper extends Scraper {
             const jobTitle = card.querySelector(JOB_TITLE);
             const company = card.querySelector(COMPANY);
             const time = card.querySelector('time');
-            dataArr.push({
+
+            jobTitle && dataArr.push({
               job: jobTitle?.textContent.trim(),
               company: company?.textContent.trim(),
               companyId: company?.href.match(/\d+/g)[0].trim(),
