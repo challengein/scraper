@@ -79,9 +79,7 @@ class LinkedinScraper extends Scraper {
 
   protected async chechForLoggedIn(page: Page) {
     await page.goto(this.baseUrl, {
-      waitUntil: 'load',
-      // Remove the timeout
-      timeout: 0
+      waitUntil: 'load'
     });
     if ((await page.$(Constants.PROFILE)) !== null) return true;
   }
@@ -89,9 +87,7 @@ class LinkedinScraper extends Scraper {
   protected async login(page: Page) {
     try {
       await page.goto(this.loginPage, {
-        waitUntil: 'load',
-        // Remove the timeout
-        timeout: 0
+        waitUntil: 'load'
       });
 
       await page.click(Constants.USERNAME_INPUT);
@@ -103,7 +99,6 @@ class LinkedinScraper extends Scraper {
       logger.info(`${this.tag}: `, `try to sign in..`);
       await page.click(Constants.SIGNIN_BTN);
       await page.waitFor(4000);
-
     } catch (err) {
       logger.info(`${this.tag}: loginError: `, err);
       await page.screenshot({ path: 'loginError.png' });
@@ -113,36 +108,23 @@ class LinkedinScraper extends Scraper {
 
   protected async set24hFilter(page: Page) {
     try {
-      await this.waitForUpdateEventResponse(page);
-
-      await page.waitFor(Constants.FILTERS);
       await page.evaluate(DATE_POSTED_BTN => {
         const dropdownBtn = document.querySelector(DATE_POSTED_BTN);
         dropdownBtn && dropdownBtn.click();
       }, Constants.DATE_POSTED_BTN);
       await page.waitFor(500);
-
-      if ((await page.$(Constants.RADIO_BTNS_CONTAINER)) === null)
-        return logger.error(`${this.tag}:`, 'cant find RADIO_BTNS_CONTAINER');
       await page.evaluate(RADIO_BTNS_CONTAINER => {
         const radioBtnsContainer = document.querySelector(RADIO_BTNS_CONTAINER);
         radioBtnsContainer &&
           radioBtnsContainer.children[0].children[1].click();
       }, Constants.RADIO_BTNS_CONTAINER);
       await page.waitFor(500);
-
-
-      if ((await page.$(Constants.APPLY_BTN)) === null)
-        return logger.error(`${this.tag}:`, 'cant find APPLY_BTN');
       await page.evaluate(APPLY_BTN => {
-
         const btn = document.querySelector(APPLY_BTN);
         if (btn) {
-            btn.click();
+          btn.click();
         }
       }, Constants.APPLY_BTN);
-      await page.waitFor(4000);
-      await this.waitForUpdateEventResponse(page);
     } catch (err) {
       logger.error(`${this.tag}:`, err);
     }
@@ -177,9 +159,7 @@ class LinkedinScraper extends Scraper {
   protected async searchJobs(page: Page) {
     try {
       await page.goto(this.jobsPage, {
-        waitUntil: 'load',
-        // Remove the timeout
-        timeout: 0
+        waitUntil: 'load'
       });
 
       await page.waitFor(Constants.SEARCH_JOB_TITLE_INPUT);
@@ -208,10 +188,9 @@ class LinkedinScraper extends Scraper {
   }
 
   protected async getData(page: Page) {
+    await page.waitFor(4000);
     try {
       logger.info('getData');
-      await page.waitFor(3000);
-      await page.waitForSelector(Constants.JOBS_CONTAINER);
       let i = 25;
 
       i = await page.evaluate(
@@ -251,14 +230,15 @@ class LinkedinScraper extends Scraper {
             const company = card.querySelector(COMPANY);
             const time = card.querySelector('time');
 
-            jobTitle && dataArr.push({
-              job: jobTitle?.textContent.trim(),
-              company: company?.textContent.trim(),
-              companyId: company?.href.match(/\d+/g)[0].trim(),
-              timestamp: `${time?.getAttribute(
-                'datetime'
-              )}: ${time?.textContent.trim()}`
-            });
+            jobTitle &&
+              dataArr.push({
+                job: jobTitle?.textContent.trim(),
+                company: company?.textContent.trim(),
+                companyId: company?.href.match(/\d+/g)[0].trim(),
+                timestamp: `${time?.getAttribute(
+                  'datetime'
+                )}: ${time?.textContent.trim()}`
+              });
           });
 
           return dataArr;
