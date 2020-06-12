@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import puppeteer, { Page } from 'puppeteer';
 import dotenv from 'dotenv';
 dotenv.config();
 import { logger } from '../logger';
@@ -6,6 +6,8 @@ import UserAgent from 'user-agents';
 import { Scraper } from '../Scraper';
 import fs from 'fs';
 import util from 'util';
+import { waitForResponse } from '../utils/waitForResponse';
+import { waitForRequest } from '../utils/waitForRequest';
 
 const asyncWriteFile = util.promisify(fs.writeFile);
 
@@ -16,7 +18,6 @@ enum Constants {
   JOBS_CONTAINER = '.jobs-search-results--is-two-pane',
   JOB_TITLE = '.job-card-search__title',
   COMPANY = '.job-card-search__company-name-link',
-
   DATE_POSTED_BTN = 'button[aria-controls="date-posted-facet-values"]',
   RADIO_BTNS_CONTAINER = '#date-posted-facet-values ul.search-s-facet__list',
   APPLY_BTN = 'div#date-posted-facet-values button[data-control-name="filter_pill_apply"]',
@@ -24,9 +25,13 @@ enum Constants {
   SEARCH_JOB_TITLE_INPUT = '.jobs-search-box__input--keyword input[type=text]',
   SEARCH_LOCATION_INPUT = '.jobs-search-box__input--location input[type=text]',
   SEARCH_SUBMIT_BTN = 'button[type=submit].jobs-search-box__submit-button',
-  CURRENT_PAGE_BTN_CONTAINER = '.artdeco-pagination__indicator--number.active.selected',
+  CURRENT_PAGE_BTN_CONTAINER = '.artdeco-pagination__indicator--number.selected',
   MESSAGES_BTN = '.msg-overlay-bubble-header__button',
-  MESSAGES_OVERLAY = '.msg-overlay-bubble-header[data-control-name="overlay.minimize_connection_list_bar"]'
+  MESSAGES_OVERLAY = '.msg-overlay-bubble-header[data-control-name="overlay.minimize_connection_list_bar"]',
+  PROFILE = '.profile-rail-card__actor-link',
+  FILTERS = '.search-filters-bar',
+  PAGINATION = '.artdeco-pagination__pages',
+  JOB_LIST_ITEM = '.artdeco-list__item'
 }
 
 interface JobInfo {
@@ -38,6 +43,8 @@ interface JobInfo {
 
 class LinkedinScraper extends Scraper {
   protected baseUrl = 'https://www.linkedin.com/';
+  protected histiryUpdateUrl =
+    this.baseUrl + 'voyager/api/search/history?action=update';
   protected loginPage = this.baseUrl + 'login';
   protected jobsPage = this.baseUrl + 'jobs';
   protected data: JobInfo[] = [];
@@ -53,29 +60,44 @@ class LinkedinScraper extends Scraper {
       slowMo: 100,
       userDataDir: './data',
       // args: ['--start-maximized'],
+      executablePath: process.env.path || undefined,
       defaultViewport: null
     });
 
     const page = await browser.newPage();
+    await page.setDefaultNavigationTimeout(0);
     const userAgent = new UserAgent({ deviceCategory: 'desktop' });
     await page.setUserAgent(userAgent.toString());
 
     return { browser, page };
   }
 
-  protected async login(page: puppeteer.Page) {
+  protected async chechForLoggedIn(page: Page) {
+    await page.goto(this.baseUrl, {
+      waitUntil: 'load',
+      // Remove the timeout
+      timeout: 0
+    });
+    if ((await page.$(Constants.PROFILE)) !== null) return true;
+  }
+
+  protected async login(page: Page) {
     try {
-      await page.goto(this.loginPage);
-      await page.waitFor(3000);
-      if (await page.$(Constants.USERNAME_INPUT)) {
-        await page.click(Constants.USERNAME_INPUT);
-        await page.keyboard.type(process.env.login as string);
-        await page.click(Constants.PASSWORD_INPUT);
-        await page.keyboard.type(process.env.password as string);
-        logger.info(`${this.tag}: `, `try to sign in..`);
-        await page.click(Constants.SIGNIN_BTN);
-        await page.waitFor(4000);
-      }
+      await page.goto(this.loginPage, {
+        waitUntil: 'load',
+        // Remove the timeout
+        timeout: 0
+      });
+
+      await page.click(Constants.USERNAME_INPUT);
+      await page.waitFor(500);
+      await page.keyboard.type(process.env.login as string);
+      await page.click(Constants.PASSWORD_INPUT);
+      await page.waitFor(500);
+      await page.keyboard.type(process.env.password as string);
+      logger.info(`${this.tag}: `, `try to sign in..`);
+      await page.click(Constants.SIGNIN_BTN);
+      await page.waitForNavigation();
     } catch (err) {
       logger.info(`${this.tag}: loginError: `, err);
       await page.screenshot({ path: 'loginError.png' });
@@ -83,53 +105,92 @@ class LinkedinScraper extends Scraper {
     }
   }
 
-  protected async searchJobs(page: puppeteer.Page) {
+  protected async set24hFilter(page: Page) {
     try {
-      await page.goto(this.jobsPage);
-      await page.waitFor(5000);
-      if (await page.$(Constants.MESSAGES_OVERLAY)) {
-        await page.evaluate(MESSAGES_BTN => {
-          const btn = document.querySelector(MESSAGES_BTN) as HTMLElement;
-          btn && btn.click();
-        }, Constants.MESSAGES_BTN);
-      }
+      await this.waitForUpdateResponse(page);
 
-      await page.waitForSelector(Constants.SEARCH_JOB_TITLE_INPUT);
-      await page.click(Constants.SEARCH_JOB_TITLE_INPUT);
-      await page.keyboard.type(this.jobPosition);
-      await page.waitFor(1500);
-      await page.click(Constants.SEARCH_LOCATION_INPUT);
-      await page.keyboard.type(this.location);
-      await page.evaluate(SEARCH_SUBMIT_BTN => {
-        const btn = document.querySelector(SEARCH_SUBMIT_BTN);
-        btn.click();
-      }, Constants.SEARCH_SUBMIT_BTN);
-      await page.waitFor(4000);
-
+      await page.waitFor(Constants.FILTERS);
       await page.evaluate(DATE_POSTED_BTN => {
         const dropdownBtn = document.querySelector(DATE_POSTED_BTN);
         dropdownBtn && dropdownBtn.click();
       }, Constants.DATE_POSTED_BTN);
       await page.waitFor(500);
+
+      if ((await page.$(Constants.RADIO_BTNS_CONTAINER)) === null)
+        return logger.error(`${this.tag}:`, 'cant find RADIO_BTNS_CONTAINER');
       await page.evaluate(RADIO_BTNS_CONTAINER => {
         const radioBtnsContainer = document.querySelector(RADIO_BTNS_CONTAINER);
         radioBtnsContainer &&
           radioBtnsContainer.children[0].children[1].click();
       }, Constants.RADIO_BTNS_CONTAINER);
       await page.waitFor(500);
-      await page.evaluate((APPLY_BTN) => {
+
+      if ((await page.$(Constants.APPLY_BTN)) === null)
+        return logger.error(`${this.tag}:`, 'cant find APPLY_BTN');
+      await page.evaluate(APPLY_BTN => {
         const btn = document.querySelector(APPLY_BTN);
         if (btn) {
             btn.click();
         }
       }, Constants.APPLY_BTN);
-      await page.waitFor(4000);
+      await this.waitForUpdateResponse(page);
+    } catch (err) {
+      logger.error(`${this.tag}:`, err);
+    }
+  }
+
+  protected async waitForUpdateResponse(page: Page) {
+    await waitForRequest(page, 'https://lnkd.demdex.net/event');
+    await waitForResponse(page, 'https://lnkd.demdex.net/event');
+  }
+
+  protected async closeMessenger(page: Page) {
+    const localStorage = await page.evaluate(() =>
+      Object.assign({}, window.localStorage)
+    );
+    try {
+      const messagesState = JSON.parse(
+        localStorage['voyager-web:msg-overlay-state']
+      );
+      const isMinimized = messagesState[0]._listBubble.isMinimized;
+      if (!isMinimized) {
+        await page.waitFor(Constants.MESSAGES_BTN);
+        await page.evaluate(MESSAGES_BTN => {
+          const btn = document.querySelector(MESSAGES_BTN) as HTMLElement;
+          btn && btn.click();
+        }, Constants.MESSAGES_BTN);
+      }
+    } catch (err) {
+      logger.error('closeMessenger:', err);
+    }
+  }
+
+  protected async searchJobs(page: Page) {
+    try {
+      await page.goto(this.jobsPage, {
+        waitUntil: 'load',
+        // Remove the timeout
+        timeout: 0
+      });
+
+      await page.waitFor(Constants.SEARCH_JOB_TITLE_INPUT);
+      await page.click(Constants.SEARCH_JOB_TITLE_INPUT);
+      await page.waitFor(1000);
+      await page.keyboard.type(this.jobPosition);
+
+      await page.click(Constants.SEARCH_LOCATION_INPUT);
+      await page.waitFor(1000);
+      await page.keyboard.type(this.location);
+
+      await page.evaluate(SEARCH_SUBMIT_BTN => {
+        const btn = document.querySelector(SEARCH_SUBMIT_BTN);
+        btn.click();
+      }, Constants.SEARCH_SUBMIT_BTN);
 
       logger.info(
         `${this.tag}: `,
         `try to search jobs.., ${this.jobPosition} - ${this.location}`
       );
-      await page.waitFor(3000);
     } catch (err) {
       logger.error(`${this.tag}: searchJobsErro: `, err);
       await page.screenshot({ path: 'searchJobsError.png' });
@@ -137,10 +198,20 @@ class LinkedinScraper extends Scraper {
     }
   }
 
-  protected async getData(page: puppeteer.Page) {
+  protected async getData(page: Page) {
     try {
-      let i = 4;
-      logger.info('getData');
+      await page.waitFor(3000);
+      await page.waitForSelector(Constants.JOBS_CONTAINER);
+      let i = 25;
+
+      i = await page.evaluate(
+        JOB_LIST_ITEM => {
+          const cards = document.querySelectorAll(JOB_LIST_ITEM);
+          return cards.length;
+        },
+        Constants.JOB_LIST_ITEM,
+        i
+      );
 
       while (i >= 0) {
         await page.evaluate(
@@ -156,15 +227,15 @@ class LinkedinScraper extends Scraper {
           Constants.JOBS_CONTAINER,
           i
         );
-
-        await page.waitFor(1500);
+        await page.waitFor(50);
+        i === 0 && (await page.waitFor(1000));
         i--;
       }
       const freshData = await page.evaluate(
-        (JOB_TITLE, COMPANY, JOB_CARD) => {
+        (JOB_TITLE, COMPANY, JOB_LIST_ITEM) => {
           const dataArr: any = [];
 
-          const cards = document.querySelectorAll(JOB_CARD);
+          const cards = document.querySelectorAll(JOB_LIST_ITEM);
 
           cards.forEach(card => {
             const jobTitle = card.querySelector(JOB_TITLE);
@@ -185,11 +256,11 @@ class LinkedinScraper extends Scraper {
         },
         Constants.JOB_TITLE,
         Constants.COMPANY,
-        Constants.JOB_CARD,
+        Constants.JOB_LIST_ITEM
       );
-      logger.info(freshData);
-
+      logger.info(`${this.tag}: `, `+${freshData.length} jobs`);
       this.data = [...this.data, ...freshData];
+      await this.loadMore(page);
     } catch (err) {
       logger.error(`${this.tag}: getDataError: `, err);
       await page.screenshot({ path: 'getDataError.png' });
@@ -197,18 +268,25 @@ class LinkedinScraper extends Scraper {
     }
   }
 
-  protected async loadMore(page: puppeteer.Page) {
+  protected async loadMore(page: Page) {
     try {
-      await page.evaluate(CURRENT_PAGE_BTN_CONTAINER => {
+      if ((await page.$(Constants.PAGINATION)) === null) return;
+      const resume = await page.evaluate(CURRENT_PAGE_BTN_CONTAINER => {
         const curBtnContainer = document.querySelector(
           CURRENT_PAGE_BTN_CONTAINER
         );
-        console.log(curBtnContainer);
-        const nextBtn = curBtnContainer.nextElementSibling.children[0];
-        nextBtn && nextBtn.click();
+        if (
+          curBtnContainer?.children?.length > 0 &&
+          curBtnContainer.nextElementSibling
+        ) {
+          const nextBtn = curBtnContainer.nextElementSibling.children[0];
+          nextBtn && nextBtn.click();
+        } else {
+          return !!curBtnContainer.nextElementSibling;
+        }
       }, Constants.CURRENT_PAGE_BTN_CONTAINER);
       await page.waitFor(3000);
-      await this.getData(page);
+      resume && this.getData(page);
     } catch (err) {
       logger.error(`${this.tag}: loadMoreError: `, err);
       await page.screenshot({ path: 'loadMoreError.png' });
@@ -219,17 +297,19 @@ class LinkedinScraper extends Scraper {
   public async run() {
     logger.info(`${this.tag}: `, `Start scraping..`);
     const { page, browser } = await this.setup();
-    await this.login(page);
+    const isLoggedIn = await this.chechForLoggedIn(page);
+    !isLoggedIn && (await this.login(page));
+    await this.closeMessenger(page);
     await this.searchJobs(page);
+    await this.set24hFilter(page);
     logger.info(
       `${this.tag}: `,
       `data scraping, ${this.jobPosition} - ${this.location}`
     );
     await this.getData(page);
-    await this.loadMore(page);
     await browser.close();
     await asyncWriteFile('./linkedin_jobs.json', JSON.stringify(this.data));
-    logger.info(`${this.tag}: `, `Scraping finished`);
+    logger.info(`${this.tag}: `, `Scraping finished: ${this.data.length} jobs`);
   }
 }
 
